@@ -1,2 +1,8 @@
 data/*
+preprocessed_data/*
+external_data/*
+segmentation_validation/*
+weights/*
+
+__pycache__
 *.zip
