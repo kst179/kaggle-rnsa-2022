@@ -1,22 +1,27 @@
-from asyncio import staggered
-from re import I
-import torch
-import cv2
-from pathlib import Path
-import numpy as np
-
 from argparse import ArgumentParser
+from asyncio import staggered
+from pathlib import Path
+from re import I
+
+import cv2
+import numpy as np
+import torch
+from torch import Tensor
 
 from utils.constants import colors
+from utils.misc import minmax_normalize
 
 
-def visualize(image, mask=None, name=None, get_other=None, W=1440, H=810):
+def visualize(image, mask=None, bboxes=None, name=None, get_other=None, W=1440, H=810):
     X, Y, Z, dx, dy, dz = 0, 0, 0, 0, 0, 0
     aw, ah, ax, ay = 0, 0, 0, 0
     cw, ch, cx, cy = 0, 0, 0, 0
     sw, sh, sx, sy = 0, 0, 0, 0
     segmentation = False
     focus = "none"
+    cross = "cross"
+    cross_opts = ["none", "cross", "box", "point"]
+    box_size = 10
 
     def reset():
         nonlocal X, Y, Z, dx, dy, dz
@@ -24,10 +29,20 @@ def visualize(image, mask=None, name=None, get_other=None, W=1440, H=810):
         nonlocal cw, ch, cx, cy
         nonlocal sw, sh, sx, sy
         nonlocal segmentation
+        nonlocal image
         nonlocal mask
 
         if mask is not None:
+            if isinstance(mask, Tensor):
+                mask = mask.detach().cpu().numpy()
+                
+            mask = mask.astype(int)
             mask = colors[mask] / 255
+
+        if isinstance(image, Tensor):
+            image = image.detach().cpu().numpy()
+
+        image = minmax_normalize(image, inplace=False)
 
         X = image.shape[0] // 2
         Y = image.shape[1] // 2
@@ -49,31 +64,76 @@ def visualize(image, mask=None, name=None, get_other=None, W=1440, H=810):
 
     def redraw_canvas():
         canvas = np.zeros((H, W, 3))
+        w, h, d = image.shape
 
-        canvas[ay:ay+ah, ax:ax+aw] = cv2.resize(image[:, ::-1, -Z].T, (aw, ah))[:, :, None]
-        canvas[cy:cy+ch, cx:cx+cw] = cv2.resize(image[:, -Y, ::-1].T, (cw, ch))[:, :, None]
-        canvas[sy:sy+sh, sx:sx+sw] = cv2.resize(image[X, ::-1, ::-1].T, (sw, sh))[:, :, None]
+        axial = image[:, :, d-1-Z][:, :, None].repeat(3, -1)
+        coronal = image[:, h-1-Y, :][:, :, None].repeat(3, -1)
+        sagittal = image[X, :, :][:, :, None].repeat(3, -1)
+
+        if bboxes is not None:
+            for bbox in bboxes:
+                x1, y1, z1, x2, y2, z2 = map(int, bbox)
+                
+                if z1 <= d - 1 - Z <= z2:
+                    cv2.rectangle(axial, (y1, x1), (y2, x2), (0, 0, 1), 1)
+
+                if y1 <= h - 1 - Y <= y2:
+                    cv2.rectangle(coronal, (z1, x1), (z2, x2), (0, 0, 1), 1)
+
+                if x1 <= X <= x2:
+                    cv2.rectangle(sagittal, (z1, y1), (z2, y2), (0, 0, 1), 1)
+
+        canvas[ay:ay+ah, ax:ax+aw] = cv2.resize(axial[:, ::-1].swapaxes(0, 1), (aw, ah))
+        canvas[cy:cy+ch, cx:cx+cw] = cv2.resize(coronal[:, ::-1].swapaxes(0, 1), (cw, ch))
+        canvas[sy:sy+sh, sx:sx+sw] = cv2.resize(sagittal[::-1, ::-1].swapaxes(0, 1), (sw, sh))
 
         if segmentation and mask is not None:
             canvas = canvas * 0.7
-            canvas[ay:ay+ah, ax:ax+aw] += cv2.resize(mask[:, ::-1, -Z].swapaxes(0, 1), (aw, ah)) * 0.3
-            canvas[cy:cy+ch, cx:cx+cw] += cv2.resize(mask[:, -Y, ::-1].swapaxes(0, 1), (cw, ch)) * 0.3
+            canvas[ay:ay+ah, ax:ax+aw] += cv2.resize(mask[:, ::-1, d-1-Z].swapaxes(0, 1), (aw, ah)) * 0.3
+            canvas[cy:cy+ch, cx:cx+cw] += cv2.resize(mask[:, h-1-Y, ::-1].swapaxes(0, 1), (cw, ch)) * 0.3
             canvas[sy:sy+sh, sx:sx+sw] += cv2.resize(mask[X, ::-1, ::-1].swapaxes(0, 1), (sw, sh)) * 0.3
 
-        x = int(ax + X / dx * aw)
-        cv2.line(canvas, (x, ay), (x, ay+ah), (1, 0, 0))
-        y = int(ay + Y / dy * ah)
-        cv2.line(canvas, (ax, y), (ax+aw, y), (0, 1, 0))
+        x = int(ax + (X + 0.5) / dx * aw)
+        y = int(ay + (Y + 0.5) / dy * ah)
 
-        x = int(cx + X / dx * cw)
-        cv2.line(canvas, (x, cy), (x, cy+ch), (1, 0, 0))
-        y = int(cy + Z / dz * ch)
-        cv2.line(canvas, (cx, y), (cx+cw, y), (0, 0, 1))
+        if cross == "cross":
+            cv2.line(canvas, (x, ay), (x, ay+ah), (1, 0, 0))
+            cv2.line(canvas, (ax, y), (ax+aw, y), (0, 1, 0))
+        elif cross == "point":
+            cv2.drawMarker(canvas, (x, y), color=(0, 0, 1), markerSize=1)
+        elif cross == "box":
+            x1, y1 = x - box_size // 2, y - box_size // 2
+            x2, y2 = x + box_size // 2, y + box_size // 2
+            
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), color=(0, 0, 1), thickness=1)
 
-        x = int(sx + Y / dy * sw)
-        cv2.line(canvas, (x, sy), (x, sy+sh), (0, 1, 0))
-        y = int(sy + Z / dz * sh)
-        cv2.line(canvas, (sx, y), (sx+sw, y), (0, 0, 1))
+        x = int(cx + (X + 0.5) / dx * cw)
+        y = int(cy + (Z + 0.5) / dz * ch)
+
+        if cross == "cross":
+            cv2.line(canvas, (x, cy), (x, cy+ch), (1, 0, 0))
+            cv2.line(canvas, (cx, y), (cx+cw, y), (0, 0, 1))
+        elif cross == "point":
+            cv2.drawMarker(canvas, (x, y), color=(0, 1, 0), markerSize=1)
+        elif cross == "box":
+            x1, y1 = x - box_size // 2, y - box_size // 2
+            x2, y2 = x + box_size // 2, y + box_size // 2
+            
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), color=(0, 1, 0), thickness=1)
+
+        x = int(sx + (Y + 0.5) / dy * sw)
+        y = int(sy + (Z + 0.5) / dz * sh)
+
+        if cross == "cross":
+            cv2.line(canvas, (x, sy), (x, sy+sh), (0, 1, 0))
+            cv2.line(canvas, (sx, y), (sx+sw, y), (0, 0, 1))
+        elif cross == "point":
+            cv2.drawMarker(canvas, (x, y), color=(1, 0, 0), markerSize=1)
+        elif cross == "box":
+            x1, y1 = x - box_size // 2, y - box_size // 2
+            x2, y2 = x + box_size // 2, y + box_size // 2
+            
+            cv2.rectangle(canvas, (x1, y1), (x2, y2), color=(1, 0, 0), thickness=1)
 
         if name is not None:
             cv2.putText(canvas, name, (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (1, 1, 1))
@@ -122,6 +182,9 @@ def visualize(image, mask=None, name=None, get_other=None, W=1440, H=810):
 
         if key == ord(" ") and mask is not None:
             segmentation = not segmentation
+
+        if key == ord("x"):
+            cross = cross_opts[(cross_opts.index(cross) + 1) % len(cross_opts)]
 
         if key == ord(".") and get_other is not None:
             image, mask, name = get_other(+1)
