@@ -15,7 +15,7 @@ if __name__ == "__main__":
     ]
 
     for scan_uid in tqdm.tqdm(segmented_scan_uids):
-        image, spacings = load_dcm_as_rsa_voxel_image(scan_uid)
+        image, spacings, _ = load_dcm_as_rsa_voxel_image(scan_uid)
         mask = load_segmentation_mask(scan_uid)
 
         image = minmax_normalize(image)

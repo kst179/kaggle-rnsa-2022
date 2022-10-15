@@ -65,7 +65,7 @@ class ConvLayer(nn.Sequential):
 
 
 class Unet3D(nn.Module):
-    def __init__(self, n_layers=4, base_channels=8, batch_norm=True):
+    def __init__(self, input_dim=1, output_dim=8, n_layers=4, base_channels=8, batch_norm=True):
         super(Unet3D, self).__init__()
 
         self.n_layers = n_layers
@@ -78,7 +78,7 @@ class Unet3D(nn.Module):
             out_channels = in_channels * 2
             
             if i == 0:
-                in_channels = 1
+                in_channels = input_dim
 
             layer = ConvLayer(in_channels, out_channels // 2, batch_norm=batch_norm)
             self.downsamples.append(layer)
@@ -101,9 +101,9 @@ class Unet3D(nn.Module):
             layer = ConvLayer(out_channels * 2, out_channels, batch_norm=batch_norm)
             self.upsample.append(layer)
 
-        self.output_conv = nn.Conv3d(base_channels, 8, 1)
+        self.output_conv = nn.Conv3d(base_channels, output_dim, 1)
 
-    def forward(self, x):
+    def encode(self, x):
         saved_x = []
 
         for i in range(self.n_layers):
@@ -114,6 +114,9 @@ class Unet3D(nn.Module):
             saved_x.append(x)
             x = down(x)
 
+        return x, saved_x
+
+    def decode(self, x, saved_x):
         x = self.intermedate_conv(x)
 
         for i in range(self.n_layers):
@@ -129,30 +132,51 @@ class Unet3D(nn.Module):
 
         return x
 
+    def forward(self, x):
+        x, saved_x = self.encode(x)
+        x = self.decode(x, saved_x)
+
+        return x
+
+class Unet3DIterative(Unet3D):
+    def __init__(self, input_dim=2, output_dim=1, n_labels=8, n_layers=4, base_channels=8, batch_norm=True):
+        super().__init__(input_dim, output_dim, n_layers, base_channels, batch_norm)
+
+        self.label_decoder = nn.Sequential(
+            ConvLayer(128, 64, stride=2),
+            ConvLayer(64, 32, stride=2),
+            nn.AdaptiveAvgPool3d(1),
+            nn.Flatten(),
+        )
+
+        self.label_classifier = nn.Linear(32, n_labels)
+        self.completness_classifier = nn.Linear(32, 1)
+
+    def forward(self, x, instance_mask):
+        x = torch.cat((x, instance_mask), dim=1)
+
+        x, saved_x = self.encode(x)
+
+        y = self.label_decoder(x)
+        label_logits = self.label_classifier(y)
+        completness = self.completness_classifier(y)
+
+        x = self.decode(x, saved_x)
+
+        return x, label_logits, completness
+
 
 if __name__ == "__main__":
-    # torch.cuda.is_available()
-    # torch.tensor(0).cuda()
-    # print(torch.cuda.memory_reserved() / 1024**2)
-    # exit()
-
-    model = Unet3D(batch_norm=True).cuda()
+    model = Unet3DIterative().cuda()
     print(model)
-    summary(model, (1, 128, 128, 128), batch_size=2, device='cuda')
+    # summary(model, (1, 128, 128, 128), batch_size=2, device='cuda')
 
     def inf():
         while True:
             yield 0
 
     for i in tqdm.tqdm(inf()):
-        dummy = torch.randn(2, 1, 128, 128, 128).cuda()
-        output = model(dummy)
-        output.sum().backward()
-
-
-    # model = nn.Sequential(nn.Conv3d(1, 16, 3, 1, 1)).cuda()
-    # summary(model, (1, 128, 128, 128), batch_size=16, device='cuda')
-    # print(torch.cuda.memory_allocated())
-    
-    # from time import sleep
-    # sleep(10)
+        dummy_image = torch.randn(2, 1, 128, 128, 128).cuda()
+        dummy_mask = torch.ones(2, 1, 128, 128, 128).cuda()
+        output_mask, label_logits, completness = model(dummy_image, dummy_mask)
+        (output_mask.sum() + label_logits.sum() + completness.sum()).backward()
