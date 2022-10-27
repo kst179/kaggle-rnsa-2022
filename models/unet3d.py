@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import tqdm
-from torchsummary import summary
 
 
 class ConvLayer(nn.Sequential):
@@ -113,19 +112,3 @@ class Unet3DIterative(Unet3D):
         x = self.decode(x, saved_x)
 
         return x, label_logits, completness
-
-
-if __name__ == "__main__":
-    model = Unet3DIterative().cuda()
-    print(model)
-    # summary(model, (1, 128, 128, 128), batch_size=2, device='cuda')
-
-    def inf():
-        while True:
-            yield 0
-
-    for i in tqdm.tqdm(inf()):
-        dummy_image = torch.randn(2, 1, 128, 128, 128).cuda()
-        dummy_mask = torch.ones(2, 1, 128, 128, 128).cuda()
-        output_mask, label_logits, completness = model(dummy_image, dummy_mask)
-        (output_mask.sum() + label_logits.sum() + completness.sum()).backward()
