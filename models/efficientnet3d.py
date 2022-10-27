@@ -18,7 +18,7 @@ class SqueezeExcitation(nn.Sequential):
         self,
         in_channels: int,
         squeeze_channels: int,
-        activation: type[nn.Module] = nn.SiLU,
+        activation: Type[nn.Module] = nn.SiLU,
     ):
         super().__init__(
             nn.AdaptiveAvgPool3d(1),
