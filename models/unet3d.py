@@ -1,59 +1,8 @@
-from audioop import reverse
-from email.mime import base
-from turtle import hideturtle
-
 import torch
 import torch.nn as nn
 import tqdm
-from einops import rearrange
 from torchsummary import summary
 
-
-class PlanarConv(nn.Module):
-    def __init__(self, in_channels, out_channels, hidden_channels=None, batchnorm=False):
-        super(PlanarConv, self).__init__()
-
-        if hidden_channels is None:
-            hidden_channels = out_channels // 3
-
-        self.conv_axial = nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1)
-        self.conv_coronal = nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1)
-        self.conv_sagittal = nn.Conv2d(in_channels, hidden_channels, kernel_size=3, padding=1)
-
-        self.batchnorm = batchnorm
-        if batchnorm:
-             self.bn_layer = nn.BatchNorm3d(hidden_channels * 3)
-
-        self.linear = nn.Conv3d(hidden_channels * 3, out_channels, kernel_size=1)
-        
-    def forward(self, x):
-        """
-        Args:
-            x (tensor): tensor of shape [batch, in_channels, SI, AP, LR]
-
-        Returns:
-            (tensor): shape [batch, out_channels, SI, AP, LR]
-        """
-        batch_size = x.shape[0]
-
-        x1 = self.conv_axial(rearrange(x, "b c i j k -> (b k) c i j"))
-        x2 = self.conv_coronal(rearrange(x, "b c i j k -> (b j) c i k"))
-        x3 = self.conv_sagittal(rearrange(x, "b c i j k -> (b i) c k j"))
-
-        x = torch.cat([
-            rearrange(x1, "(b k) c i j -> b c i j k", b = batch_size),
-            rearrange(x2, "(b j) c i k -> b c i j k", b = batch_size),
-            rearrange(x3, "(b i) c j k -> b c i j k", b = batch_size),
-        ], dim=1)
-
-        x = torch.relu(x)
-        
-        if self.batchnorm:
-            x = self.bn_layer(x)
-
-        x = self.linear(x)
-
-        return x
 
 class ConvLayer(nn.Sequential):
     def __init__(self, in_channels, out_channels, stride=1, batch_norm=False):
