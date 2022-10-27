@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 import torch
 from torch import Tensor
-from typing import Tuple, Literal
+from typing import Tuple
 
 
 @njit
@@ -104,12 +104,12 @@ def __warp_affine_cuda(input, output, T, order=1):
 
 
 def warp_affine3d(
-    image: NDArray | Tensor,
+    image: Tensor,
     inv_transform: NDArray,
-    shape: Tuple[int] | torch.Size | None = None,
-    interpolation: Literal["linear", "nearest"] = "linear", 
-    device: Literal["auto", "cpu", "cuda"] = "auto",
-) -> NDArray | Tensor:
+    shape: Tuple[int] = None,
+    interpolation: str = "linear", 
+    device: str = "auto",
+) -> Tensor:
     """
     Applies 3d affine transformation to image via 
     trilinear or nearest neighbors interpolation methods
@@ -252,11 +252,11 @@ def euler_rotation_tfm(x=0, y=0, z=0, order="xyz", degrees=True):
 
 
 def resize(
-    image: NDArray | Tensor,
+    image: Tensor,
     scale: Tuple[float, float, float] = None,
     size: Tuple[int, int, int] = None,
-    interpolation: Literal["linear", "nearest"] = "linear",
-    device: Literal["auto", "cpu", "cuda"] = "auto",
+    interpolation: str = "linear",
+    device: str = "auto",
 ):
     if scale is not None and size is not None:
         raise ValueError("Need to specify only one of `scale` or `size`")
@@ -280,14 +280,14 @@ def resize(
 
 
 def center_rotation(
-    image: NDArray | Tensor,
+    image: Tensor,
     x: float = 0,
     y: float = 0,
     z: float = 0,
     order: str = "xyz",
     degrees: bool = True,
-    interpolation: Literal["linear", "nearest"] = "linear",
-    device: Literal["auto", "cpu", "cuda"] = "auto",
+    interpolation: str = "linear",
+    device: str = "auto",
 ):
     size = np.array(image.shape)
 

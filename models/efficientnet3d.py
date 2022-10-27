@@ -1,8 +1,7 @@
 import torch
 from torch import nn
-from typing import List, Tuple, Type, Literal
+from typing import Type
 from collections import OrderedDict
-import numpy as np
 
 
 class Iota:
@@ -42,9 +41,9 @@ class ConvNormActiv(nn.Sequential):
         stride: int = 1,
         batch_norm: bool = True,
         bn_momentum: float = 0.1,
-        dropout: float | bool = 0,
+        dropout: float = 0,
         activation: Type[nn.Module] = nn.SiLU,
-        padding_mode: Literal["constant", "reflect"] = "constant",
+        padding_mode: str = "constant",
     ):
         layers = []
 
@@ -66,9 +65,9 @@ class InvResidualBlock(nn.Sequential):
         stride: int = 1, 
         batch_norm: bool = False, 
         bn_momentum: float = 0.1,
-        dropout: float | bool = 0,
+        dropout: float = 0,
         activation: Type[nn.Module] = nn.SiLU,
-        padding_mode: Literal["zeros", "reflect"] = "zeros",
+        padding_mode: str = "zeros",
         squeeze_excitation: bool = True,
         stochastic_depth_prob: float = 0,
     ):
@@ -130,9 +129,9 @@ class EfficientNet3d(nn.Sequential):
         num_classes: int = 1,
         batch_norm: bool = True,
         bn_momentum: float = 0.1,
-        dropout: float | bool = 0,
+        dropout: float = 0,
         activation: Type[nn.Module] = nn.SiLU,
-        padding_mode: Literal["zeros", "reflect"] = "zeros",
+        padding_mode: str = "zeros",
         stochastic_depth_prob: float = 0.2
     ):
         shared_params = dict(
@@ -209,66 +208,6 @@ class EfficientNet3d(nn.Sequential):
         return super().__getitem__(item)
 
 
-# class MobileDecoder(nn.Sequential):
-#     def __init__(
-#         self, 
-#         num_classes: int = 1,
-#         batch_norm: bool = False,
-#         bn_momentum: float = 0.1,
-#         dropout: float | bool = 0,
-#         activation: Type[nn.Module] = nn.SiLU,
-#         padding_mode: Literal["zeros", "reflect"] = "zeros",
-#         stochastic_depth_prob: float = 0.2,
-#     ):
-#         shared_params = dict(
-#             batch_norm=batch_norm,
-#             bn_momentum=bn_momentum,
-#             dropout=dropout,
-#             activation=activation,
-#             padding_mode=padding_mode,
-#         )
-
-#         iota = Iota(start=7)
-#         num_layers = 17
-#         sd_prob = lambda: stochastic_depth_prob * iota() / num_layers
-
-#         layers = []
-
-#         layers.extend([
-#             # [32, 48, 48, 48]
-#             InvResidualBlock(32, 64, expansion_factor=6, stride=2, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(64, 64, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(64, 64, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(64, 64, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             # [64, 24, 24, 24]
-#             InvResidualBlock(64, 96, expansion_factor=6, stride=2, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(96, 96, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(96, 96, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             # [96, 12, 12, 12]
-#             InvResidualBlock(96, 160, expansion_factor=6, stride=2, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(160, 160, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             InvResidualBlock(160, 160, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-#             # [160, 6, 6, 6]
-#             InvResidualBlock(160, 320, expansion_factor=6, stride=1, stochastic_depth_prob=sd_prob(), **shared_params),
-
-#             nn.Conv3d(320, 1280, kernel_size=1),
-#         ])
-
-#         if batch_norm: layers.append( nn.BatchNorm3d(1280, momentum=bn_momentum) )
-#         if dropout: layers.append( nn.Dropout(dropout, inplace=True) )
-
-#         layers.extend([
-#             activation(inplace=True),
-#             # [1280, 6, 6, 6]
-#             nn.AdaptiveAvgPool3d(1),
-#             nn.Flatten(),
-#             # [1280,]
-#             nn.Linear(1280, num_classes),
-#         ])
-
-#         super().__init__(*layers)
-
-
 class EfficientNet3dClassifier(nn.Module):
     def __init__(
         self,
@@ -306,9 +245,9 @@ class EfficientUNet3d(nn.Module):
         self,
         batch_norm: bool = True,
         bn_momentum: float = 0.1,
-        dropout: float | bool = 0,
+        dropout: float = 0,
         activation: Type[nn.Module] = nn.SiLU,
-        padding_mode: Literal["zeros", "reflect"] = "zeros",
+        padding_mode: str = "zeros",
     ):
         super().__init__()
 

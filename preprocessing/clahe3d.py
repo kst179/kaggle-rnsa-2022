@@ -1,22 +1,16 @@
-from operator import is_
-from pydoc import cli
-from time import time
-from typing import Literal
 import numpy as np
 from numba import cuda, njit
 from numpy.typing import NDArray
 from torch import Tensor
 import torch
 
-from utils.misc import pad_to_grid
-
 
 def clahe3d(
-    image: NDArray | Tensor,
+    image: Tensor,
     size: int = 8, 
     clip_limit: float = 5.0, 
     n_bins: int = 256,
-    device: Literal["auto", "cpu", "cuda"] = "auto",
+    device: str = "auto",
 ):
     is_tensor = isinstance(image, Tensor)
     data_device = "cpu" if not is_tensor else image.device.type
@@ -120,7 +114,7 @@ def __clahe3d_cpu(image: np.ndarray, size: int = 8, clip_limit=5, n_bins=256):
 
 
 def __clahe3d_gpu(
-    image: NDArray | Tensor,
+    image: Tensor,
     size: int = 8,
     clip_limit: float = 5.0,
     n_bins: int = 256,
